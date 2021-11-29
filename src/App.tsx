@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './App.css';
-import Wallet from '../../';
+import Wallet from "@araviel/safe-wallet-adapter";
 import {
   Connection,
   SystemProgram,
