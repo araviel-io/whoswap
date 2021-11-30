@@ -104,7 +104,7 @@ export function useAccountInfo(publicKey?: PublicKey) {
   return [
     useRefEqual(
       accountInfo,
-      (oldInfo:any, newInfo:any) =>
+      (oldInfo, newInfo) =>
         !!oldInfo &&
         !!newInfo &&
         oldInfo.data.equals(newInfo.data) &&
@@ -114,12 +114,12 @@ export function useAccountInfo(publicKey?: PublicKey) {
   ];
 }
 
-export function refreshAccountInfo(connection:any, publicKey:any, clearCache = false) {
+export function refreshAccountInfo(connection, publicKey, clearCache = false) {
   const cacheKey = tuple(connection, publicKey.toBase58());
   refreshCache(cacheKey, clearCache);
 }
 
-export function setInitialAccountInfo(connection:any, publicKey:any, accountInfo:any) {
+export function setInitialAccountInfo(connection, publicKey, accountInfo) {
   const cacheKey = tuple(connection, publicKey.toBase58());
   setCache(cacheKey, accountInfo, { initializeOnly: true });
 }
