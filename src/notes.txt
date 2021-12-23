@@ -48,3 +48,37 @@ https://github.com/Fair-Exchange/safecoin-program-library/blob/master/token/js/c
 
             await swapClient.program.provider.sendAll(txs);
         };
+
+
+
+
+
+
+      /*
+            tx.add(
+              SystemProgram.createAccount({
+                fromPubkey: pubkey,
+                newAccountPubkey: transferAccPubKey,
+                lamports: await Token.getMinBalanceRentForExemptAccount(
+                  connection
+                ) + 50000,
+                space: AccountLayout.span,
+                programId: PROGRAM_ID,
+              })
+            );
+            addLog('Getting recent blockhash');
+            tx.recentBlockhash = (
+              await connection.getRecentBlockhash()
+            ).blockhash;
+      
+            addLog('Sending signature request to wallet');
+            tx.feePayer = pubkey;
+            const signed = await selectedWallet.signTransaction(tx);
+            addLog('signed :' + signed + '');
+            addLog('Got signature, submitting transaction');
+            //const signature = await connection.sendRawTransaction(signed.serialize());
+            const signature2 = await connection.sendTransaction(tx, [transferAcc])
+            addLog('Submitted transaction ' + signature2 + ', awaiting confirmation');
+            await connection.confirmTransaction(signature2, 'singleGossip');
+            addLog('Transaction ' + signature2 + ' confirmed');
+      */

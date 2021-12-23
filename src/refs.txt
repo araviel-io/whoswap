@@ -1,0 +1,75 @@
+ /*
+    async function wrapSol(
+      provider: Wallet,
+      wrappedSolAccount: Keypair,
+      fromMint: PublicKey,
+      amount: BN
+    ): Promise<{ tx: Transaction; signers: Array<Signer | undefined> }> {
+      const tx = new Transaction();
+      const signers = [wrappedSolAccount];
+      // Create new, rent exempt account.
+      tx.add(
+        SystemProgram.createAccount({
+          fromPubkey: provider.publicKey,
+          newAccountPubkey: wrappedSolAccount.publicKey,
+          lamports: await Token.getMinBalanceRentForExemptAccount(
+            provider.connection
+          ),
+          space: 165,
+          programId: TOKEN_PROGRAM_ID,
+        })
+      );
+      // Transfer lamports. These will be converted to an SPL balance by the
+      // token program.
+      if (fromMint.equals(SOL_MINT)) {
+        tx.add(
+          SystemProgram.transfer({
+            fromPubkey: provider.wallet.publicKey,
+            toPubkey: wrappedSolAccount.publicKey,
+            lamports: amount.toNumber(),
+          })
+        );
+      }
+      // Initialize the account.
+      tx.add(
+        Token.createInitAccountInstruction(
+          TOKEN_PROGRAM_ID,
+          WRAPPED_SOL_MINT,
+          wrappedSolAccount.publicKey, // topubkey
+          provider.wallet.publicKey //MY wallet
+        )
+      );
+      return { tx, signers };
+    }
+  */
+
+
+        /*
+            const createAccInstruction = SystemProgram.createAccount({
+              fromPubkey: mainPubkey,
+              lamports: await Token.getMinBalanceRentForExemptAccount(connection),
+              newAccountPubkey: newAccount.publicKey,
+              programId: TOKEN_PROGRAM_ID,
+              space: AccountLayout.span,
+            })
+      
+            const createTokenAccountInstruction = Token.createInitAccountInstruction(
+              TOKEN_PROGRAM_ID,
+              WRAPPED_SOL_MINT,
+              newAccount.publicKey,
+              mainPubkey
+            )
+      
+            const signature = await connection.sendTransaction(
+              new Transaction()
+                .add(
+                  createAccInstruction,
+                  createTokenAccountInstruction),
+              [newAccount]
+            )
+            const result = await connection.confirmTransaction(
+              signature,
+              'processed'
+            )
+            console.log(result);
+      */
