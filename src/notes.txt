@@ -1,5 +1,6 @@
 wrap-unwrap leads
-
+https://stackoverflow.com/questions/70206015/solana-web3-js-getting-web3-signer-from-wallet
+https://giters.com/solana-labs/wallet-adapter/issues/169
 https://github.com/Fair-Exchange/safecoin-program-library/blob/master/token/js/client/token.js#L100
 
     two serum functions
