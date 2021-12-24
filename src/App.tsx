@@ -106,7 +106,13 @@ function App(): React.ReactElement {
     }
   }
 
-  async function unwrapSafe() {
+  async function unwrapSafe(
+    /* for implementation
+    connection: Connection,
+    programId: PublicKey,
+    owner: PublicKey,
+     */
+  ) {
     try {
       const mainPubkey = selectedWallet?.publicKey;
       if (!mainPubkey || !selectedWallet) {
@@ -126,28 +132,19 @@ function App(): React.ReactElement {
           []
         )
       );
-      addLog('Getting recent blockhash');
       transac.recentBlockhash = (
         await connection.getRecentBlockhash()
       ).blockhash;
-
-      addLog('Sending signature request to wallet');
       transac.feePayer = mainPubkey;
-
       //transac.partialSign(newAccount)
       const signed = await selectedWallet.signTransaction(transac);
       //signed.serialize()
       //signed.partialSign(newAccount)
-      addLog('signed :' + signed + '');
       const signature2 = await connection.sendRawTransaction(signed.serialize());
-      addLog('Sending transaction succes : ' + signature2 + '');
       const confirmation = await connection.confirmTransaction(signature2, 'singleGossip');
-      addLog('Confirmation status ' + confirmation.value);
       console.log("Confirmation : ", confirmation)
     } catch (e) {
-      addLog('ERROR ::  ' + e);
       console.log(`eeeee`, e);
-
     }
   }
 
@@ -157,10 +154,9 @@ function App(): React.ReactElement {
     if (!pubkey || !selectedWallet) {
       throw new Error('wallet not connected');
     }
-    const MY_WALLET_ADDRESS = pubkey;
 
     const accounts = await connection.getParsedProgramAccounts(
-      TOKEN_PROGRAM_ID, // new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+      TOKEN_PROGRAM_ID,
       {
         filters: [
           {
@@ -169,55 +165,40 @@ function App(): React.ReactElement {
           {
             memcmp: {
               offset: 32, // number of bytes
-              bytes: MY_WALLET_ADDRESS.toBase58(), // base58 encoded string
+              bytes: pubkey.toBase58(), // base58 encoded string
             },
           },
         ],
       }
     );
 
-    console.log("native mint : ", NATIVE_MINT.toBase58())
-    console.log("accounts: ", accounts)
     addLog(
-      `Found ${accounts.length} token account(s) for wallet ${MY_WALLET_ADDRESS}: `
+      `Found ${accounts.length} token account(s) for wallet ${pubkey}: `
     );
     accounts.forEach((account, i) => {
-      if (account.pubkey === NATIVE_MINT)
+      const associatedTokenMetadata = account.pubkey.toString();
+
+      if (account.account.data["parsed"]["info"]["mint"] === NATIVE_MINT.toBase58()) {
+        console.log("wrapped safe found :", associatedTokenMetadata);
         addLog(
-          `-- Token Account Address ${i + 1}: ${account.pubkey.toString()} --`
+          `-- Wrapped safe AssociatedAcc : ${account.pubkey.toString()} --` +
+          `Amount: ${account.account.data["parsed"]["info"]["tokenAmount"]["uiAmount"]}`
         );
-      addLog(`Mint: ${account.account.data["parsed"]["info"]["mint"]}`);
-      addLog(
-        `Amount: ${account.account.data["parsed"]["info"]["tokenAmount"]["uiAmount"]}`
-      );
+      }
     });
-    /*
-      // Output
-  
-      Found 1 token account(s) for wallet FriELggez2Dy3phZeHHAdpcoEXkKQVkv6tx3zDtCVP8T: 
-      -- Token Account Address 1: Et3bNDxe2wP1yE5ao6mMvUByQUHg8nZTndpJNvfKLdCb --
-      Mint: BUGuuhPsHpk8YZrL2GctsCtXGneL1gmT5zYb7eMHZDWf
-      Amount: 3
-    */
   };
 
   async function createAccountforWrap() {
+    // parameters : connection ? selectedwallet, amount
+    // should check if an MINT_NATIVE is already created
     const newAccount = new Keypair();
-    //const transferAccPubKey = transferAcc.publicKey;
-    const WRAPPED_SAFE_MINT = new PublicKey(
-      'Safe111111111111111111111111111111111111112',
-    );
 
-    //await connection.requestAirdrop(newAccount.publicKey, 1000000000);
-    //const provider = Provider;
     try {
       const mainPubkey = selectedWallet?.publicKey;
       if (!mainPubkey || !selectedWallet) {
         throw new Error('wallet not connected');
       }
       const transac = new Transaction();
-      //const signers = [Keypair];
-
 
       transac.add(
         SystemProgram.createAccount({
@@ -230,21 +211,21 @@ function App(): React.ReactElement {
       );
 
       transac.add(
-        Token.createInitAccountInstruction(
-          TOKEN_PROGRAM_ID,
-          WRAPPED_SAFE_MINT,
-          newAccount.publicKey,
-          mainPubkey
-        )
-      )
-
-      transac.add(
         SystemProgram.transfer({
           fromPubkey: mainPubkey,
           toPubkey: newAccount.publicKey,
           lamports: 20000,
         })
       );
+
+      transac.add(
+        Token.createInitAccountInstruction(
+          TOKEN_PROGRAM_ID,
+          NATIVE_MINT,
+          newAccount.publicKey,
+          mainPubkey
+        )
+      )
 
       addLog('Getting recent blockhash');
       transac.recentBlockhash = (
