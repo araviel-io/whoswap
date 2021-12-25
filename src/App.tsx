@@ -109,9 +109,10 @@ function App(): React.ReactElement {
   async function unwrapSafe(
     /* for implementation
     connection: Connection,
-    programId: PublicKey,
+    nativemint: PublicKey,
     owner: PublicKey,
      */
+    assacc: PublicKey[]
   ) {
     try {
       const mainPubkey = selectedWallet?.publicKey;
@@ -119,14 +120,12 @@ function App(): React.ReactElement {
         throw new Error('wallet not connected');
       }
 
-
       const transac = new Transaction();
-      // trigger the unwrap ONLY if there is an account containing Safe111111111111111111111111111111111111112
-      // create a loop if there is multiples
+      // TODO : create a loop if there is multiples (if assac.length > 0) loop oters instructions
       transac.add(
         Token.createCloseAccountInstruction(
           TOKEN_PROGRAM_ID,
-          new PublicKey('DTZdNDieJg2NvytL8XgRzXX7yuVkB4s19AATfHwBZmZP'),
+          assacc[0],
           mainPubkey,
           mainPubkey,
           []
@@ -136,10 +135,7 @@ function App(): React.ReactElement {
         await connection.getRecentBlockhash()
       ).blockhash;
       transac.feePayer = mainPubkey;
-      //transac.partialSign(newAccount)
       const signed = await selectedWallet.signTransaction(transac);
-      //signed.serialize()
-      //signed.partialSign(newAccount)
       const signature2 = await connection.sendRawTransaction(signed.serialize());
       const confirmation = await connection.confirmTransaction(signature2, 'singleGossip');
       console.log("Confirmation : ", confirmation)
@@ -149,12 +145,15 @@ function App(): React.ReactElement {
   }
 
   async function checkWrappedSafe() {
-
+    // 1. fetch account
+    // 2. filter associated NATIVE_MINT accounts
+    // 3. unwrap if associated is found
+    
     const pubkey = selectedWallet?.publicKey;
     if (!pubkey || !selectedWallet) {
       throw new Error('wallet not connected');
     }
-
+    // returns all tokens accounts
     const accounts = await connection.getParsedProgramAccounts(
       TOKEN_PROGRAM_ID,
       {
@@ -172,23 +171,38 @@ function App(): React.ReactElement {
       }
     );
 
-    addLog(
-      `Found ${accounts.length} token account(s) for wallet ${pubkey}: `
-    );
-    accounts.forEach((account, i) => {
-      const associatedTokenMetadata = account.pubkey.toString();
+    console.log(`Found ${accounts.length} token account(s) for wallet ${pubkey}: `);
 
-      if (account.account.data["parsed"]["info"]["mint"] === NATIVE_MINT.toBase58()) {
-        console.log("wrapped safe found :", associatedTokenMetadata);
-        addLog(
-          `-- Wrapped safe AssociatedAcc : ${account.pubkey.toString()} --` +
-          `Amount: ${account.account.data["parsed"]["info"]["tokenAmount"]["uiAmount"]}`
-        );
-      }
-    });
+    function parseAccount() {
+      const result : PublicKey[] = [];
+
+      accounts.map((account, i) => {
+        
+        //go through accounts and catch native minted ones
+        if (account.account.data["parsed"]["info"]["mint"] === NATIVE_MINT.toBase58()) {
+          console.log("wrapped safe found on :", account.pubkey.toString());
+          result.push(account.pubkey)
+          addLog(
+            `-- Wrapped safe AssociatedAcc : ${account.pubkey.toString()} --` +
+            `Amount: ${account.account.data["parsed"]["info"]["tokenAmount"]["uiAmount"]}`
+          );
+          
+        }
+      });
+      console.log("arrayresult", result)
+      return result
+    }
+
+    // if no account wrapped account found do nothing, otherwise ask to unwrap
+    if (parseAccount().length === 0) {
+      console.log("No Wrapped account found")
+    } else {
+      unwrapSafe(parseAccount())
+    }
+
   };
 
-  async function createAccountforWrap() {
+  async function wrapSafe() {
     // parameters : connection ? selectedwallet, amount
     // should check if an MINT_NATIVE is already created
     const newAccount = new Keypair();
@@ -214,7 +228,7 @@ function App(): React.ReactElement {
         SystemProgram.transfer({
           fromPubkey: mainPubkey,
           toPubkey: newAccount.publicKey,
-          lamports: 20000,
+          lamports: 2000000000,
         })
       );
 
@@ -269,13 +283,13 @@ function App(): React.ReactElement {
         <div style={{ marginTop: "10px" }}>
           <div>Wallet address: {selectedWallet.publicKey?.toBase58()}.</div>
           <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={sendTransaction}>Send Transaction</button>
-          <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={createAccountforWrap}>Create token account</button>
-          <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={unwrapSafe}>Unwrap SAFE</button>
+          <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={wrapSafe}>Wrap Safe</button>
+          {/*<button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={unwrapSafe}>Unwrap SAFE</button>*/}
           {/*<button onClick={signMessage}>Sign Message</button>*/}
           <button style={{ color: "white", background: "black", padding: "8px", margin: "6px" }} onClick={() => selectedWallet.disconnect()}>
             Disconnect
           </button>
-          <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={checkWrappedSafe}>WSAFE CHECK</button>
+          <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={checkWrappedSafe}>WSAFE CHECK & unwrap</button>
           <div></div>
         </div>
       ) : (
