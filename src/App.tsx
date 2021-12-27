@@ -111,34 +111,40 @@ function App(): React.ReactElement {
     connection: Connection,
     nativemint: PublicKey,
     owner: PublicKey,
-     */
-    assacc: PublicKey[]
+    assacc: PublicKey[]*/
   ) {
     try {
       const mainPubkey = selectedWallet?.publicKey;
       if (!mainPubkey || !selectedWallet) {
         throw new Error('wallet not connected');
       }
+      // returns any PublicKey found
+      const fetchedAdd = await checkWrappedSafe();
 
-      const transac = new Transaction();
-      // TODO : create a loop if there is multiples (if assac.length > 0) loop oters instructions
-      transac.add(
-        Token.createCloseAccountInstruction(
-          TOKEN_PROGRAM_ID,
-          assacc[0],
-          mainPubkey,
-          mainPubkey,
-          []
-        )
-      );
-      transac.recentBlockhash = (
-        await connection.getRecentBlockhash()
-      ).blockhash;
-      transac.feePayer = mainPubkey;
-      const signed = await selectedWallet.signTransaction(transac);
-      const signature2 = await connection.sendRawTransaction(signed.serialize());
-      const confirmation = await connection.confirmTransaction(signature2, 'singleGossip');
-      console.log("Confirmation : ", confirmation)
+      console.log("fetchedAdd ", fetchedAdd)
+      if (fetchedAdd.length != 0) {
+        const transac = new Transaction();
+        // TODO : create a loop if there is multiples (if assac.length > 0) loop oters instructions
+        transac.add(
+          Token.createCloseAccountInstruction(
+            TOKEN_PROGRAM_ID,
+            fetchedAdd[0],
+            mainPubkey,
+            mainPubkey,
+            []
+          )
+        );
+        transac.recentBlockhash = (
+          await connection.getRecentBlockhash()
+        ).blockhash;
+        transac.feePayer = mainPubkey;
+        const signed = await selectedWallet.signTransaction(transac);
+        const signature2 = await connection.sendRawTransaction(signed.serialize());
+        const confirmation = await connection.confirmTransaction(signature2, 'singleGossip');
+        console.log("Confirmation : ", confirmation)
+      } else {
+        addLog("There is nothing to unwrap")
+      }
     } catch (e) {
       console.log(`eeeee`, e);
     }
@@ -147,8 +153,7 @@ function App(): React.ReactElement {
   async function checkWrappedSafe() {
     // 1. fetch account
     // 2. filter associated NATIVE_MINT accounts
-    // 3. unwrap if associated is found
-    
+    // 3. returns accounts or empty array
     const pubkey = selectedWallet?.publicKey;
     if (!pubkey || !selectedWallet) {
       throw new Error('wallet not connected');
@@ -174,10 +179,10 @@ function App(): React.ReactElement {
     console.log(`Found ${accounts.length} token account(s) for wallet ${pubkey}: `);
 
     function parseAccount() {
-      const result : PublicKey[] = [];
+      const result: PublicKey[] = [];
 
       accounts.map((account, i) => {
-        
+
         //go through accounts and catch native minted ones
         if (account.account.data["parsed"]["info"]["mint"] === NATIVE_MINT.toBase58()) {
           console.log("wrapped safe found on :", account.pubkey.toString());
@@ -186,32 +191,34 @@ function App(): React.ReactElement {
             `-- Wrapped safe AssociatedAcc : ${account.pubkey.toString()} --` +
             `Amount: ${account.account.data["parsed"]["info"]["tokenAmount"]["uiAmount"]}`
           );
-          
         }
       });
-      console.log("arrayresult", result)
+
       return result
     }
 
-    // if no account wrapped account found do nothing, otherwise ask to unwrap
+    // if no account wrapped found do nothing
     if (parseAccount().length === 0) {
-      console.log("No Wrapped account found")
-    } else {
-      unwrapSafe(parseAccount())
+      addLog("No Wrapped account found")
     }
-
+    return parseAccount();
   };
 
   async function wrapSafe() {
     // parameters : connection ? selectedwallet, amount
     // should check if an MINT_NATIVE is already created
-    const newAccount = new Keypair();
 
     try {
       const mainPubkey = selectedWallet?.publicKey;
       if (!mainPubkey || !selectedWallet) {
         throw new Error('wallet not connected');
       }
+
+      // returns any PublicKey found
+      const fetchedAdd = await checkWrappedSafe();
+      
+      const newAccount = new Keypair();
+
       const transac = new Transaction();
 
       transac.add(
@@ -253,11 +260,9 @@ function App(): React.ReactElement {
       const signed = await selectedWallet.signTransaction(transac);
       //signed.serialize()
       signed.partialSign(newAccount)
-      addLog('signed :' + signed + '');
       const signature2 = await connection.sendRawTransaction(signed.serialize());
       addLog('Sending transaction succes : ' + signature2 + '');
       const confirmation = await connection.confirmTransaction(signature2, 'singleGossip');
-      addLog('Confirmation status ' + confirmation.value);
       console.log("Confirmation : ", confirmation)
 
     } catch (e) {
@@ -283,13 +288,14 @@ function App(): React.ReactElement {
         <div style={{ marginTop: "10px" }}>
           <div>Wallet address: {selectedWallet.publicKey?.toBase58()}.</div>
           <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={sendTransaction}>Send Transaction</button>
-          <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={wrapSafe}>Wrap Safe</button>
           {/*<button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={unwrapSafe}>Unwrap SAFE</button>*/}
           {/*<button onClick={signMessage}>Sign Message</button>*/}
           <button style={{ color: "white", background: "black", padding: "8px", margin: "6px" }} onClick={() => selectedWallet.disconnect()}>
             Disconnect
           </button>
-          <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={checkWrappedSafe}>WSAFE CHECK & unwrap</button>
+          <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={checkWrappedSafe}>Check Safe</button>
+          <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={wrapSafe}>Wrap Safe</button>
+          <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={unwrapSafe}>unWrap</button>
           <div></div>
         </div>
       ) : (
