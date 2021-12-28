@@ -9,12 +9,11 @@ import {
   Keypair,
   PublicKey,
   Signer,
+  TransactionInstruction,
 } from '@safecoin/web3.js';
 import { AccountLayout, NATIVE_MINT, Token, TOKEN_PROGRAM_ID } from '@safecoin/safe-token';
 // for instructions who requires a signer (especially account creation) use partialSign(newAccount) >
 
-// todo fetch and display tokens
-// catch and trigger if wrapped safe
 function toHex(buffer: Buffer) {
   return Array.prototype.map
     .call(buffer, (x: number) => ('00' + x.toString(16)).slice(-2))
@@ -38,6 +37,7 @@ function App(): React.ReactElement {
     Wallet | undefined | null
   >(undefined);
   const [, setConnected] = useState(false);
+
   useEffect(() => {
     if (selectedWallet) {
       selectedWallet.on('connect', () => {
@@ -141,7 +141,7 @@ function App(): React.ReactElement {
         const signed = await selectedWallet.signTransaction(transac);
         const signature2 = await connection.sendRawTransaction(signed.serialize());
         const confirmation = await connection.confirmTransaction(signature2, 'singleGossip');
-        console.log("Confirmation : ", confirmation)
+        console.log("Succefully unwrapped : ", confirmation)
       } else {
         addLog("There is nothing to unwrap")
       }
@@ -206,7 +206,6 @@ function App(): React.ReactElement {
 
   async function wrapSafe() {
     // parameters : connection ? selectedwallet, amount
-    // should check if an MINT_NATIVE is already created
 
     try {
       const mainPubkey = selectedWallet?.publicKey;
@@ -215,60 +214,102 @@ function App(): React.ReactElement {
       }
 
       // returns any PublicKey found
-      const fetchedAdd = await checkWrappedSafe();
-      
-      const newAccount = new Keypair();
+      const fetchedAcc = await checkWrappedSafe();
 
-      const transac = new Transaction();
+      if (fetchedAcc.length !== 0) // account already here
+      {
+        const transac = new Transaction();
+        addLog('Wrapped account exists, sending to it');
 
-      transac.add(
-        SystemProgram.createAccount({
-          fromPubkey: mainPubkey,
-          lamports: await Token.getMinBalanceRentForExemptAccount(connection),
-          newAccountPubkey: newAccount.publicKey,
-          programId: TOKEN_PROGRAM_ID,
-          space: AccountLayout.span,
-        })
-      );
-
-      transac.add(
-        SystemProgram.transfer({
-          fromPubkey: mainPubkey,
-          toPubkey: newAccount.publicKey,
-          lamports: 2000000000,
-        })
-      );
-
-      transac.add(
-        Token.createInitAccountInstruction(
-          TOKEN_PROGRAM_ID,
-          NATIVE_MINT,
-          newAccount.publicKey,
-          mainPubkey
+        transac.add(
+          SystemProgram.transfer({
+            fromPubkey: mainPubkey,
+            toPubkey: fetchedAcc[0],
+            lamports: 2000000000, 
+          }),
+          new TransactionInstruction({
+            keys: [
+              {
+                pubkey: fetchedAcc[0],
+                isSigner: false,
+                isWritable: true,
+              },
+            ],
+            data: Buffer.from(new Uint8Array([17])),
+            programId: TOKEN_PROGRAM_ID,
+          })
         )
-      )
 
-      addLog('Getting recent blockhash');
-      transac.recentBlockhash = (
-        await connection.getRecentBlockhash()
-      ).blockhash;
+        transac.recentBlockhash = (
+          await connection.getRecentBlockhash()
+        ).blockhash;
 
-      addLog('Sending signature request to wallet');
-      transac.feePayer = mainPubkey;
+        transac.feePayer = mainPubkey;
+        const signed = await selectedWallet.signTransaction(transac);
+        const signature2 = await connection.sendRawTransaction(signed.serialize());
+        const confirmation = await connection.confirmTransaction(signature2, 'singleGossip');
+        console.log("Succefully wrapped : ", confirmation)
 
-      //transac.partialSign(newAccount)
-      const signed = await selectedWallet.signTransaction(transac);
-      //signed.serialize()
-      signed.partialSign(newAccount)
-      const signature2 = await connection.sendRawTransaction(signed.serialize());
-      addLog('Sending transaction succes : ' + signature2 + '');
-      const confirmation = await connection.confirmTransaction(signature2, 'singleGossip');
-      console.log("Confirmation : ", confirmation)
+      } else { // no accounts found, create - fund and initializing a NATIVE_MINT account
+        const transac = new Transaction();
+        addLog('Creating a wrapped account');
+        const newAccount = new Keypair();
+
+        transac.add(
+          SystemProgram.createAccount({
+            fromPubkey: mainPubkey,
+            lamports: await Token.getMinBalanceRentForExemptAccount(connection),
+            newAccountPubkey: newAccount.publicKey,
+            programId: TOKEN_PROGRAM_ID,
+            space: AccountLayout.span,
+          })
+        );
+        transac.add(
+          Token.createInitAccountInstruction(
+            TOKEN_PROGRAM_ID,
+            NATIVE_MINT,
+            newAccount.publicKey,
+            mainPubkey
+          )
+        )
+        transac.add(
+          SystemProgram.transfer({
+            fromPubkey: mainPubkey,
+            toPubkey: newAccount.publicKey,
+            lamports: 2000000000,
+          }),
+          new TransactionInstruction({
+            keys: [
+              {
+                pubkey: newAccount.publicKey,
+                isSigner: false,
+                isWritable: true,
+              },
+            ],
+            data: Buffer.from(new Uint8Array([17])),
+            programId: TOKEN_PROGRAM_ID,
+          })
+        );
+
+        transac.recentBlockhash = (
+          await connection.getRecentBlockhash()
+        ).blockhash;
+
+        addLog('Sending signature request to wallet');
+        transac.feePayer = mainPubkey;
+
+        //transac.partialSign(newAccount)
+        const signed = await selectedWallet.signTransaction(transac);
+        //signed.serialize()
+        signed.partialSign(newAccount)
+        const signature2 = await connection.sendRawTransaction(signed.serialize());
+        addLog('Sending transaction succes : ' + signature2 + '');
+        const confirmation = await connection.confirmTransaction(signature2, 'singleGossip');
+        console.log("Succefully created & funded a wrapped account : ", confirmation)
+      }
 
     } catch (e) {
-      addLog('ERROR ::  ' + e);
-      console.log(`eeeee`, e);
-
+      addLog('ERROR : ' + e);
     }
   }
 
@@ -287,15 +328,15 @@ function App(): React.ReactElement {
       {selectedWallet && selectedWallet.connected ? (
         <div style={{ marginTop: "10px" }}>
           <div>Wallet address: {selectedWallet.publicKey?.toBase58()}.</div>
-          <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={sendTransaction}>Send Transaction</button>
+          {/*<button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={sendTransaction}>Send Transaction</button>*/}
           {/*<button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={unwrapSafe}>Unwrap SAFE</button>*/}
           {/*<button onClick={signMessage}>Sign Message</button>*/}
-          <button style={{ color: "white", background: "black", padding: "8px", margin: "6px" }} onClick={() => selectedWallet.disconnect()}>
-            Disconnect
-          </button>
           <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={checkWrappedSafe}>Check Safe</button>
           <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={wrapSafe}>Wrap Safe</button>
           <button style={{ background: "green", padding: "8px", margin: "6px" }} onClick={unwrapSafe}>unWrap</button>
+          <button style={{ color: "white", background: "black", padding: "8px", margin: "6px" }} onClick={() => selectedWallet.disconnect()}>
+            Disconnect
+          </button>
           <div></div>
         </div>
       ) : (
